@@ -365,7 +365,7 @@ void Main()
 	Scene::SetBackground(Palette::White);
 	Game field;
 
-
+	Window::Resize(400, 600);
 
 	while (System::Update())
 	{
