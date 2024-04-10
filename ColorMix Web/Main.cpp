@@ -71,65 +71,44 @@ struct ColorNode
 	bool bePicked = false;
 };
 
-void drawColorNode(const Vec2& pos, ColorType c)
-{
-	Circle(pos, 30).draw(getColor(c));
-}
-
 struct ColorEnemy
 {
-	int32 n;
 	ColorType type;
 	bool beDissapear = false;
 };
-
-void drawColorEnemy(const Vec2& pos, ColorType c)
-{
-	RoundRect(Arg::center = pos, 60, 60, 10).draw(getColor(c));
-}
 
 struct FixedColorNode {
-	int32 n;
 	ColorType type;
-	bool beDissapear = false;
+	bool beDisappear = false;
 };
-
-struct ColorLane
-{
-	Array<ColorNode> nodes;
-	Array<std::variant<ColorEnemy, FixedColorNode>> fixedNodes;
-};
-
-int32 getN(const std::variant<ColorEnemy, FixedColorNode>& fixedNode) {
-	if (std::holds_alternative<ColorEnemy>(fixedNode))
-	{
-		return std::get<ColorEnemy>(fixedNode).n;
-	}
-	else
-	{
-		return std::get<FixedColorNode>(fixedNode).n;
-	}
-}
 
 struct Game
 {
-	Array<ColorLane> lanes;
-	double oneLaneWidth = 70.0;
+	static constexpr Size gridSize = { 6,128 };
+	Grid<Optional<FixedColorNode>> fixedNodeGrid;
+	Grid<Optional<ColorEnemy>> enemyGrid;
+	Array<Array<ColorNode>> nodesLanes;
+	static constexpr double width = 360.0;
+	static constexpr double oneLaneWidth = width / gridSize.x;
 	double laneHeight = 500.0;
 	double enemySpeed = 5.0;
 	double nodeSpeed = 20.0;
 
 	double stageProgress = 0.0;
-	double enemyProgressAccum = 0.0;
-	static constexpr double enemySpanLength = 65;
-	static constexpr double enemyAppearY = 0;
+	int32 enemySetIndexY = 10;
+	static constexpr double enemySpanLength = 60;
+	static constexpr double enemyAppearY = -100;
 
 	static constexpr double upSpaceY = 50;
 
-	Vec2 pickWaitingPos;
+
+	static constexpr Vec2 pickWaitingPos = Vec2(width / 2, 510);
 	Optional<ColorType> waitingNode;
 	Array<ColorType> nextNodes;
 	Stopwatch waitNodeSetTimer;
+
+	Array<ColorType> NodeSetToShuffle = { ColorType::red,ColorType::yellow,ColorType::blue,ColorType::red,ColorType::yellow,ColorType::blue };
+	Array<ColorType> shuffledNodeStack;
 
 	Optional<ColorType> pickingNode;
 	Vec2 predictedPos;
@@ -137,8 +116,10 @@ struct Game
 
 	Game()
 	{
-		lanes.resize(4);
-		pickWaitingPos = Vec2(width() / 2, 510);
+
+		fixedNodeGrid.resize(gridSize);
+		enemyGrid.resize(gridSize);
+		nodesLanes.resize(gridSize.x);
 		waitNodeSetTimer.restart();
 		nextNodes.resize(3);
 		for (auto& node : nextNodes)
@@ -146,13 +127,7 @@ struct Game
 			node = ColorType(Random(0, 2));
 		}
 
-		stageProgress = 100;
-		enemyProgressAccum = stageProgress;
-	}
-
-	double width() const
-	{
-		return lanes.size() * oneLaneWidth;
+		stageProgress = 600;
 	}
 
 	double laneCenterX(size_t laneIndex) const
@@ -170,82 +145,123 @@ struct Game
 		return static_cast<int32>(Floor((stageProgress - y) / enemySpanLength));
 	}
 
+	void drawEnemy(const Vec2& pos, ColorType c) const
+	{
+		double oneEdge = oneLaneWidth * 0.8;
+		RoundRect(Arg::center = pos, oneEdge, oneEdge, 10).draw(getColor(c));
+	}
+
+	void drawNode(const Vec2& pos, ColorType c) const
+	{
+		double r = oneLaneWidth * 0.4;
+		Circle(pos, r).draw(getColor(c));
+	}
+
 	void update(double delta)
 	{
-		Transformer2D tf(Mat3x2::Translate((Scene::Width() - width()) / 2, upSpaceY), TransformCursor::Yes);
+		Transformer2D tf(Mat3x2::Translate((Scene::Width() - width) / 2, upSpaceY), TransformCursor::Yes);
 
 		stageProgress += delta * enemySpeed;
-		enemyProgressAccum += delta * enemySpeed;
 
-		for (auto& lane : lanes)
+		for (auto [lane_i, lane] : IndexedRef(nodesLanes))
 		{
-			for (auto& node : lane.nodes)
+			for (auto& node : lane)
 			{
 				node.y -= delta * nodeSpeed;
 
 				//find collision
-				int32 findIndex = nodeIndexAtY(node.y - enemySpanLength / 2);
+				Point findIndex = { lane_i,nodeIndexAtY(node.y - enemySpanLength / 2) };
 				bool found = false;
-				for (auto& fixedNode : lane.fixedNodes) {
-					int32 n = getN(fixedNode);
-					if (n == findIndex)
-					{
+
+				if (fixedNodeGrid.inBounds(findIndex)) {
+					if (fixedNodeGrid[findIndex]) {
 						found = true;
-						break;
+					}
+					if (enemyGrid[findIndex]) {
+						found = true;
 					}
 				}
+
 				if (found)
 				{
-					int32 pushIndex = findIndex - 1;
-					node.y = fixedNodeCenterY(pushIndex);
+					Point pushIndex = findIndex + Point(0, -1);
+					node.y = fixedNodeCenterY(pushIndex.y);
 					node.beFixed = true;
-					lane.fixedNodes.push_back(FixedColorNode{ pushIndex, node.type });
+					if (fixedNodeGrid.inBounds(pushIndex)) {
+						fixedNodeGrid[pushIndex] = FixedColorNode{ node.type };
 
-					bool foundAtDown = false;
-					for (auto [i, fixedNode] : IndexedRef(lane.fixedNodes)) {
-						int32 n = getN(fixedNode);
-						ColorType type = std::holds_alternative<ColorEnemy>(fixedNode) ? std::get<ColorEnemy>(fixedNode).type : std::get<FixedColorNode>(fixedNode).type;
-						if (n == pushIndex + 1 && node.type == type)
+						bool foundAtDown = false;
+
+						Point downIndex = pushIndex + Point(0, 1);
+						if (enemyGrid.inBounds(downIndex)) {
+							if (auto& o = enemyGrid[downIndex])
+							{
+								if (o->type == node.type)
+								{
+									o.reset();
+									fixedNodeGrid[pushIndex].reset();
+									foundAtDown = true;
+								}
+							}
+							else if (auto& o = fixedNodeGrid[downIndex])
+							{
+								if (o->type == node.type)
+								{
+									o.reset();
+									fixedNodeGrid[pushIndex].reset();
+									foundAtDown = true;
+								}
+							}
+						}
+
+						if (foundAtDown)
 						{
-							foundAtDown = true;
-
-							std::visit([&](auto& o) {o.beDissapear = true; }, fixedNode);
-							std::visit([&](auto& o) {o.beDissapear = true; }, lane.fixedNodes.back());
-							break;
+							for (int32 i = pushIndex.y - 1; i >= 0; i--) {
+								Point p = { pushIndex.x,i };
+								if (enemyGrid.inBounds(p)) {
+									if (enemyGrid[p])
+									{
+										break;
+									}
+								}
+								if (fixedNodeGrid.inBounds(p)) {
+									if (auto& o = fixedNodeGrid[p])
+									{
+										nodesLanes[lane_i].push_back({ fixedNodeCenterY(i), o->type });
+										o.reset();
+									}
+								}
+							}
 						}
 					}
+
 
 				}
 			}
 
-			lane.nodes.remove_if([](const ColorNode& node) {return node.beFixed; });
-			lane.fixedNodes.remove_if([](const std::variant<ColorEnemy, FixedColorNode>& node) {
-				if (std::holds_alternative<ColorEnemy>(node))
-				{
-					return std::get<ColorEnemy>(node).beDissapear;
-				}
-				else
-				{
-					return std::get<FixedColorNode>(node).beDissapear;
-				}
-				});
+			lane.remove_if([](const ColorNode& node) {return node.beFixed; });
 		}
 
 
 
-		while (enemyProgressAccum > enemySpanLength)
+		while (nodeIndexAtY(enemyAppearY) >= enemySetIndexY)
 		{
-			enemyProgressAccum -= enemySpanLength;
 			int32 n = 3;
 			//配列からランダムにｎ個選ぶ処理
-			Array<int32> indexes = step(static_cast<int32>(lanes.size()));
+			Array<int32> indexes = step(static_cast<int32>(gridSize.x));
 			indexes.shuffle();
 			indexes.resize(n);
 			for (auto i : indexes)
 			{
-				lanes[i].fixedNodes.push_back(ColorEnemy{ nodeIndexAtY(enemyAppearY + enemyProgressAccum), ColorType(Random(0, 6)) });
+				Point p = { i,enemySetIndexY };
+				if (enemyGrid.inBounds(p))
+				{
+					enemyGrid[p] = ColorEnemy{ ColorType(Random(0, 6)) };
+				}
 			}
+			enemySetIndexY++;
 		}
+
 		if (not pickingNode and waitingNode and Circle(pickWaitingPos, 20).leftClicked())
 		{
 			pickingNode = waitingNode;
@@ -255,8 +271,8 @@ struct Game
 
 		if (not pickingNode) {
 			bool picked = false;
-			size_t laneIndex = static_cast<size_t>(Clamp<int32>(Cursor::PosF().x / oneLaneWidth, 0, lanes.size() - 1));
-			for (auto& node : lanes[laneIndex].nodes)
+			size_t laneIndex = static_cast<size_t>(Clamp<int32>(Cursor::PosF().x / oneLaneWidth, 0, gridSize.x - 1));
+			for (auto& node : nodesLanes[laneIndex])
 			{
 				if (Abs(node.y - Cursor::PosF().y) < 20 and MouseL.down())
 				{
@@ -268,7 +284,7 @@ struct Game
 				}
 			}
 			if (picked) {
-				lanes[laneIndex].nodes.remove_if([](const ColorNode& node) {return node.bePicked; });
+				nodesLanes[laneIndex].remove_if([](const ColorNode& node) {return node.bePicked; });
 			}
 		}
 
@@ -276,7 +292,13 @@ struct Game
 			if (nextNodes) {
 				waitingNode = nextNodes[0];
 				nextNodes.erase(nextNodes.begin());
-				nextNodes.push_back(ColorType(Random(0, 2)));
+
+				if (not shuffledNodeStack) {
+					shuffledNodeStack = NodeSetToShuffle.shuffled();
+				}
+
+				nextNodes.push_back(shuffledNodeStack.back());
+				shuffledNodeStack.pop_back();
 			}
 			else {
 				waitingNode = ColorType(Random(0, 2));
@@ -284,12 +306,12 @@ struct Game
 		}
 
 		if (pickingNode) {
-			size_t laneIndex = static_cast<size_t>(Clamp<int32>(Cursor::PosF().x / oneLaneWidth, 0, lanes.size() - 1));
+			size_t laneIndex = static_cast<size_t>(Clamp<int32>(Cursor::PosF().x / oneLaneWidth, 0, gridSize.x - 1));
 
 			bool mixable = false;
 			size_t minedIndex = 0;
 			ColorType mixedColor;
-			for (auto [i, node] : Indexed(lanes[laneIndex].nodes))
+			for (auto [i, node] : Indexed(nodesLanes[laneIndex]))
 			{
 				if (Abs(node.y - Cursor::PosF().y) < 20)
 				{
@@ -308,12 +330,12 @@ struct Game
 			if (MouseL.up())
 			{
 				if (mixable) {
-					lanes[laneIndex].nodes[minedIndex].type = mixedColor;
+					nodesLanes[laneIndex][minedIndex].type = mixedColor;
 					pickingNode.reset();
 					pickingUpperLimitY.reset();
 				}
 				else {
-					lanes[laneIndex].nodes.push_back({ predictedPos.y, *pickingNode });
+					nodesLanes[laneIndex].push_back({ predictedPos.y, *pickingNode });
 					pickingNode.reset();
 					pickingUpperLimitY.reset();
 				}
@@ -323,29 +345,28 @@ struct Game
 
 	void draw() const
 	{
-		Transformer2D tf(Mat3x2::Translate((Scene::Width() - width()) / 2, upSpaceY), TransformCursor::Yes);
+		Transformer2D tf(Mat3x2::Translate((Scene::Width() - width) / 2, upSpaceY), TransformCursor::Yes);
 
-		for (auto [i, lane] : Indexed(lanes))
-		{
-			for (auto& node : lane.nodes)
-			{
-				drawColorNode({ laneCenterX(i), node.y }, node.type);
-			}
-			for (auto& enemy : lane.fixedNodes)
-			{
-				if (std::holds_alternative<ColorEnemy>(enemy))
-				{
-					auto& e = std::get<ColorEnemy>(enemy);
-					drawColorEnemy({ laneCenterX(i),fixedNodeCenterY(e.n) }, e.type);
-				}
-				else
-				{
-					auto& e = std::get<FixedColorNode>(enemy);
-					drawColorNode({ laneCenterX(i), fixedNodeCenterY(e.n) }, e.type);
-				}
+		for (auto& p : step(enemyGrid.size())) {
+			if (auto& enemy = enemyGrid[p]) {
+				drawEnemy({ laneCenterX(p.x), fixedNodeCenterY(p.y) }, enemy->type);
 			}
 		}
-		for (auto i : step(lanes.size() + 1))
+		for (auto& p : step(fixedNodeGrid.size())) {
+			if (auto& fixedNode = fixedNodeGrid[p]) {
+				drawNode({ laneCenterX(p.x), fixedNodeCenterY(p.y) }, fixedNode->type);
+			}
+		}
+
+
+		for (auto [i, lane] : Indexed(nodesLanes))
+		{
+			for (auto& node : lane)
+			{
+				drawNode({ laneCenterX(i), node.y }, node.type);
+			}
+		}
+		for (auto i : step(gridSize.x + 1))
 		{
 			Line(i * oneLaneWidth, 0, i * oneLaneWidth, laneHeight).draw(2, Palette::Black);
 		}
