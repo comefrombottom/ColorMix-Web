@@ -73,7 +73,7 @@ struct ColorNode
 
 void drawColorNode(const Vec2& pos, ColorType c)
 {
-	Circle(pos, 20).draw(getColor(c));
+	Circle(pos, 30).draw(getColor(c));
 }
 
 struct ColorEnemy
@@ -85,7 +85,7 @@ struct ColorEnemy
 
 void drawColorEnemy(const Vec2& pos, ColorType c)
 {
-	RoundRect(Arg::center = pos, 40, 40, 10).draw(getColor(c));
+	RoundRect(Arg::center = pos, 60, 60, 10).draw(getColor(c));
 }
 
 struct FixedColorNode {
@@ -114,18 +114,21 @@ int32 getN(const std::variant<ColorEnemy, FixedColorNode>& fixedNode) {
 struct Game
 {
 	Array<ColorLane> lanes;
-	double oneLaneWidth = 50.0;
+	double oneLaneWidth = 70.0;
 	double laneHeight = 500.0;
 	double enemySpeed = 5.0;
 	double nodeSpeed = 20.0;
 
 	double stageProgress = 0.0;
 	double enemyProgressAccum = 0.0;
-	static constexpr double enemySpanLength = 45;
-	static constexpr double enemyAppearY = 550;
+	static constexpr double enemySpanLength = 65;
+	static constexpr double enemyAppearY = 0;
+
+	static constexpr double upSpaceY = 50;
 
 	Vec2 pickWaitingPos;
 	Optional<ColorType> waitingNode;
+	Array<ColorType> nextNodes;
 	Stopwatch waitNodeSetTimer;
 
 	Optional<ColorType> pickingNode;
@@ -134,12 +137,17 @@ struct Game
 
 	Game()
 	{
-		lanes.resize(6);
-		pickWaitingPos = Vec2(width() / 2, -20);
+		lanes.resize(4);
+		pickWaitingPos = Vec2(width() / 2, 510);
 		waitNodeSetTimer.restart();
+		nextNodes.resize(3);
+		for (auto& node : nextNodes)
+		{
+			node = ColorType(Random(0, 2));
+		}
 
-		stageProgress = 200;
-		enemyProgressAccum = 200;
+		stageProgress = 100;
+		enemyProgressAccum = stageProgress;
 	}
 
 	double width() const
@@ -154,17 +162,17 @@ struct Game
 
 	double fixedNodeCenterY(int32 n) const
 	{
-		return enemySpanLength * n + enemySpanLength / 2 - stageProgress;
+		return -enemySpanLength * n - enemySpanLength / 2 + stageProgress;
 	}
 
 	int32 nodeIndexAtY(double y) const
 	{
-		return static_cast<int32>(Floor((y + stageProgress) / enemySpanLength));
+		return static_cast<int32>(Floor((stageProgress - y) / enemySpanLength));
 	}
 
 	void update(double delta)
 	{
-		Transformer2D tf(Mat3x2::Translate((Scene::Width() - width()) / 2, 70), TransformCursor::Yes);
+		Transformer2D tf(Mat3x2::Translate((Scene::Width() - width()) / 2, upSpaceY), TransformCursor::Yes);
 
 		stageProgress += delta * enemySpeed;
 		enemyProgressAccum += delta * enemySpeed;
@@ -173,10 +181,10 @@ struct Game
 		{
 			for (auto& node : lane.nodes)
 			{
-				node.y += delta * nodeSpeed;
+				node.y -= delta * nodeSpeed;
 
 				//find collision
-				int32 findIndex = nodeIndexAtY(node.y + enemySpanLength / 2);
+				int32 findIndex = nodeIndexAtY(node.y - enemySpanLength / 2);
 				bool found = false;
 				for (auto& fixedNode : lane.fixedNodes) {
 					int32 n = getN(fixedNode);
@@ -191,7 +199,7 @@ struct Game
 					int32 pushIndex = findIndex - 1;
 					node.y = fixedNodeCenterY(pushIndex);
 					node.beFixed = true;
-					lane.fixedNodes.push_back(ColorEnemy{ pushIndex, node.type });
+					lane.fixedNodes.push_back(FixedColorNode{ pushIndex, node.type });
 
 					bool foundAtDown = false;
 					for (auto [i, fixedNode] : IndexedRef(lane.fixedNodes)) {
@@ -228,17 +236,16 @@ struct Game
 		while (enemyProgressAccum > enemySpanLength)
 		{
 			enemyProgressAccum -= enemySpanLength;
-			int32 n = 4;
+			int32 n = 3;
 			//配列からランダムにｎ個選ぶ処理
-			Array<int32> indexes = step(6);
+			Array<int32> indexes = step(static_cast<int32>(lanes.size()));
 			indexes.shuffle();
 			indexes.resize(n);
 			for (auto i : indexes)
 			{
-				lanes[i].fixedNodes.push_back(ColorEnemy{ nodeIndexAtY(enemyAppearY - enemyProgressAccum), ColorType(Random(0, 6)) });
+				lanes[i].fixedNodes.push_back(ColorEnemy{ nodeIndexAtY(enemyAppearY + enemyProgressAccum), ColorType(Random(0, 6)) });
 			}
 		}
-
 		if (not pickingNode and waitingNode and Circle(pickWaitingPos, 20).leftClicked())
 		{
 			pickingNode = waitingNode;
@@ -248,28 +255,32 @@ struct Game
 
 		if (not pickingNode) {
 			bool picked = false;
-			for (auto [i, lane] : IndexedRef(lanes))
+			size_t laneIndex = static_cast<size_t>(Clamp<int32>(Cursor::PosF().x / oneLaneWidth, 0, lanes.size() - 1));
+			for (auto& node : lanes[laneIndex].nodes)
 			{
-				for (auto& node : lane.nodes)
+				if (Abs(node.y - Cursor::PosF().y) < 20 and MouseL.down())
 				{
-					if (Circle(laneCenterX(i), node.y, 20).leftClicked())
-					{
-						pickingNode = node.type;
-						node.bePicked = true;
-						pickingUpperLimitY = node.y + stageProgress;
-						picked = true;
-						break;
-					}
-				}
-				if (picked) {
-					lane.nodes.remove_if([](const ColorNode& node) {return node.bePicked; });
+					pickingNode = node.type;
+					node.bePicked = true;
+					pickingUpperLimitY = node.y - stageProgress;
+					picked = true;
 					break;
 				}
+			}
+			if (picked) {
+				lanes[laneIndex].nodes.remove_if([](const ColorNode& node) {return node.bePicked; });
 			}
 		}
 
 		if (waitNodeSetTimer > 0.1s and not waitingNode) {
-			waitingNode = ColorType(Random<int>(0, 2));
+			if (nextNodes) {
+				waitingNode = nextNodes[0];
+				nextNodes.erase(nextNodes.begin());
+				nextNodes.push_back(ColorType(Random(0, 2)));
+			}
+			else {
+				waitingNode = ColorType(Random(0, 2));
+			}
 		}
 
 		if (pickingNode) {
@@ -312,7 +323,7 @@ struct Game
 
 	void draw() const
 	{
-		Transformer2D tf(Mat3x2::Translate((Scene::Width() - width()) / 2, 70), TransformCursor::Yes);
+		Transformer2D tf(Mat3x2::Translate((Scene::Width() - width()) / 2, upSpaceY), TransformCursor::Yes);
 
 		for (auto [i, lane] : Indexed(lanes))
 		{
@@ -344,6 +355,10 @@ struct Game
 		{
 			Circle(pickWaitingPos, 20).draw(getColor(*waitingNode));
 		}
+		for (auto [i, node] : Indexed(nextNodes))
+		{
+			Circle(pickWaitingPos + Vec2(-50.0 - 50.0 * i, 0), 10).draw(getColor(node));
+		}
 
 
 		if (pickingNode)
@@ -355,7 +370,7 @@ struct Game
 		//draw upper limit line
 		if (pickingUpperLimitY)
 		{
-			Line(0, *pickingUpperLimitY - stageProgress - enemySpanLength / 2, Arg::direction(width(), 0)).draw(LineStyle::SquareDot.offset(Scene::Time()), 2, Palette::Black);
+			//Line(0, *pickingUpperLimitY + stageProgress + enemySpanLength / 2, Arg::direction(width(), 0)).draw(LineStyle::SquareDot.offset(Scene::Time()), 2, Palette::Black);
 		}
 	}
 };
@@ -364,6 +379,7 @@ void Main()
 {
 	Scene::SetBackground(Palette::White);
 	Game field;
+
 
 	Window::Resize(400, 600);
 
