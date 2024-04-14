@@ -143,8 +143,8 @@ struct Game
 
 	static constexpr double width = 360.0;
 	static constexpr double laneHeight = 500.0;
-	static constexpr double enemySpanLength = 50;
-	static constexpr Size gridSize = { 7,static_cast<int32>(laneHeight / enemySpanLength * 2) };
+	static constexpr double enemySpanLength = 70;
+	static constexpr Size gridSize = { 5,static_cast<int32>(laneHeight / enemySpanLength * 2) };
 	static constexpr double oneLaneWidth = width / gridSize.x;
 	static constexpr int32 startEnemySetIndexY = static_cast<int32>(laneHeight / enemySpanLength * 1.5);
 	double enemySpeed = 5.0;
@@ -497,35 +497,24 @@ struct Game
 			predictedPos = Vec2(laneIndex * oneLaneWidth + oneLaneWidth / 2, Cursor::Pos().y);
 
 			bool collision = false;
-			Point headIndex = { laneIndex,nodeIndexAtYReal(predictedPos.y - enemySpanLength / 2) };
-			if (enemyGrid.inBounds(headIndex))
-			{
-				if (enemyGrid[headIndex] or fixedNodeGrid[headIndex]) {
+			Point headIndex = { laneIndex,nodeIndexAtYReal(Cursor::PosF().y - enemySpanLength / 2) };
+			if (fixedNodeGrid.inBounds(headIndex)) {
+				if (fixedNodeGrid[headIndex] or enemyGrid[headIndex]) {
 					collision = true;
 				}
 			}
-			Point tailIndex = { laneIndex,nodeIndexAtYReal(predictedPos.y + enemySpanLength / 2) };
-			if (enemyGrid.inBounds(tailIndex))
-			{
-				if (enemyGrid[tailIndex] or fixedNodeGrid[tailIndex]) {
-					collision = true;
-				}
-			}
+
+
 			if (collision) {
-				NeighbourSearcher ns({ oneLaneWidth,enemySpanLength }, (Cursor::PosF() - Vec2(0, fixedNodeCenterYReal(0) + enemySpanLength / 2)) * Vec2(1, -1));
-				for (auto& p : step(100))
-				{
-					Point index = ns.pop();
-					if (not enemyGrid.inBounds(index)) {
-						continue;
+				//find down empty grid
+				headIndex.y--;
+				while (fixedNodeGrid.inBounds(headIndex)) {
+					if (not fixedNodeGrid[headIndex] and not enemyGrid[headIndex]) {
+						break;
 					}
-					if (enemyGrid[index] or fixedNodeGrid[index]) {
-						continue;
-					}
-					predictedPos = Vec2(laneCenterX(index.x), fixedNodeCenterYReal(index.y));
-					laneIndex = index.x;
-					break;
+					headIndex.y--;
 				}
+				predictedPos = Vec2(laneIndex * oneLaneWidth + oneLaneWidth / 2, fixedNodeCenterYReal(headIndex.y));
 			}
 
 
@@ -636,8 +625,6 @@ void Main()
 		{
 			field.draw();
 		}
-
-
 	}
 }
 
