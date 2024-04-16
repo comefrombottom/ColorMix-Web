@@ -112,9 +112,15 @@ struct ColorNode
 {
 	double y;
 	ColorType type;
+	int32 wasEnemy = 0;
 	bool beFixed = false;
 	bool bePicked = false;
-	bool wasEnemy = false;
+};
+
+struct PickedNode
+{
+	ColorType type;
+	int32 wasEnemy = 0;
 };
 
 struct ColorEnemy
@@ -125,7 +131,7 @@ struct ColorEnemy
 
 struct FixedColorNode {
 	ColorType type;
-	bool wasEnemy = false;
+	int32 wasEnemy = 0;
 	bool beDisappear = false;
 };
 
@@ -148,7 +154,7 @@ struct Game
 	static constexpr Size gridSize = { 5,static_cast<int32>(laneHeight / enemySpanLength * 2) };
 	static constexpr double oneLaneWidth = width / gridSize.x;
 	static constexpr int32 startEnemySetIndexY = static_cast<int32>(laneHeight / enemySpanLength * 1.5);
-	static constexpr double firstEenemySpeed = 5.0;
+	static constexpr double firstEenemySpeed = 4.0;
 	double enemySpeed = firstEenemySpeed;
 
 	static constexpr double nodeSpeed = 20.0;
@@ -172,7 +178,7 @@ struct Game
 	Array<ColorType> NodeSetToShuffle = { ColorType::red,ColorType::yellow,ColorType::blue,ColorType::red,ColorType::yellow,ColorType::blue };
 	Array<ColorType> shuffledNodeStack;
 
-	Optional<ColorType> pickingNode;
+	Optional<PickedNode> pickingNode;
 	Vec2 predictedPos;
 	Optional<double> pickingUnderLimitY = 0.0;
 	int32 prevLaneIndex;
@@ -222,6 +228,20 @@ struct Game
 		score = 0;
 		pickingNode.reset();
 		pickingUnderLimitY.reset();
+	}
+
+	bool isGameOver() const
+	{
+		for (auto lane_i : step(gridSize.x)) {
+			for (auto y_i : step(gridSize.y)) {
+				Point index = { lane_i,y_i };
+				if (fixedNodeGrid[index] or enemyGrid[index]) {
+					if (fixedNodeCenterYReal(y_i) > laneHeight + enemySpanLength / 2)return true;
+					break;
+				}
+			}
+		}
+		return false;
 	}
 
 	double laneCenterX(size_t laneIndex) const
@@ -280,7 +300,7 @@ struct Game
 		Point downIndex = index - Point(0, 1);
 		if (fixedNodeGrid.inBounds(downIndex)) {
 			if (auto& fixedNode = fixedNodeGrid[downIndex]) {
-				nodesLanes[index.x].push_back({ fixedNodeCenterYReal(downIndex.y), fixedNode->type });
+				nodesLanes[index.x].push_back({ fixedNodeCenterYReal(downIndex.y), fixedNode->type,fixedNode->wasEnemy });
 				fixedNode.reset();
 				tellGridBecomeEmpty(downIndex);
 			}
@@ -379,6 +399,7 @@ struct Game
 								{
 									if (o->type == node.type)
 									{
+										score += o->wasEnemy;
 										o.reset();
 										emptyGrids.push_back(aroundIndex);
 										foundAround = true;
@@ -387,7 +408,7 @@ struct Game
 							}
 						}
 						if (foundAround) {
-							if (fixedNodeGrid[pushIndex]->wasEnemy)score += 1;
+							score += fixedNodeGrid[pushIndex]->wasEnemy;
 							fixedNodeGrid[pushIndex].reset();
 							emptyGrids.push_back(pushIndex);
 						}
@@ -420,7 +441,7 @@ struct Game
 						if (auto& o = enemyGrid[findIndex])
 						{
 							ColorNode node = { fixedNodeCenterYReal(i), o->type };
-							node.wasEnemy = true;
+							node.wasEnemy = 1;
 							nodesLanes[lane_i].push_back(node);
 							o.reset();
 							tellGridBecomeEmpty(findIndex);
@@ -451,7 +472,7 @@ struct Game
 
 		if (not pickingNode and waitingNode and Circle(pickWaitingPos, waitingNodeRadius).leftClicked())
 		{
-			pickingNode = waitingNode;
+			pickingNode = PickedNode{ *waitingNode };
 			waitingNode.reset();
 			waitNodeSetTimer.restart();
 		}
@@ -463,7 +484,7 @@ struct Game
 			{
 				if (Abs(node.y - Cursor::PosF().y) < 20 and MouseL.down())
 				{
-					pickingNode = node.type;
+					pickingNode = { node.type,node.wasEnemy };
 					node.bePicked = true;
 					pickingUnderLimitY = node.y - stageProgress;
 					picked = true;
@@ -506,13 +527,14 @@ struct Game
 			ColorType mixedColor;
 			for (auto [i, node] : Indexed(nodesLanes[laneIndex]))
 			{
-				if (Abs(node.y - cursorY) < 20)
+				if (Abs(node.y - cursorY) < enemySpanLength * 0.8)
 				{
-					if (auto mixed = getMixedColor(node.type, *pickingNode))
+					if (auto mixed = getMixedColor(node.type, pickingNode->type))
 					{
 						mixable = true;
 						minedIndex = i;
 						mixedColor = *mixed;
+
 						break;
 					}
 				}
@@ -587,7 +609,9 @@ struct Game
 			if (MouseL.up())
 			{
 				if (mixable) {
-					nodesLanes[laneIndex][minedIndex].type = mixedColor;
+					ColorNode& mixedNode = nodesLanes[laneIndex][minedIndex];
+					mixedNode.type = mixedColor;
+					mixedNode.wasEnemy = pickingNode->wasEnemy;
 					pickingNode.reset();
 					pickingUnderLimitY.reset();
 				}
@@ -598,7 +622,7 @@ struct Game
 					pickingUpperLimitY.reset();
 				}*/
 				else {
-					nodesLanes[laneIndex].push_back({ predictedPos.y, *pickingNode });
+					nodesLanes[laneIndex].push_back({ predictedPos.y, pickingNode->type,pickingNode->wasEnemy });
 					pickingNode.reset();
 					pickingUnderLimitY.reset();
 				}
@@ -657,7 +681,7 @@ struct Game
 
 		if (pickingNode)
 		{
-			Circle(predictedPos, oneLaneWidth * 0.45).draw(getColor(*pickingNode).withAlpha(128));
+			Circle(predictedPos, oneLaneWidth * 0.45).draw(getColor(pickingNode->type).withAlpha(128));
 		}
 
 		//draw upper limit
@@ -666,7 +690,7 @@ struct Game
 		//draw under limit line
 		if (pickingUnderLimitY)
 		{
-			Line(0, *pickingUnderLimitY + stageProgress + enemySpanLength / 2, Arg::direction(width, 0)).draw(LineStyle::SquareDot.offset(Scene::Time()), 2, Palette::Black);
+			Line(0, *pickingUnderLimitY + stageProgress + enemySpanLength / 2, Arg::direction(width, 0)).draw(LineStyle::SquareDot.offset(Scene::Time() * 6), 2, Palette::Black);
 		}
 
 		RectF(-100, -100, width + 200, 100).drawShadow({ 0,0 }, 20).draw(Palette::White).drawFrame(2, Palette::Gray);
@@ -677,28 +701,68 @@ struct Game
 	}
 };
 
+enum class GameState
+{
+	title,
+	playing,
+	gameover,
+};
+
 void Main()
 {
 	Scene::SetBackground(Palette::White);
 	Game field;
 
+	GameState state = GameState::title;
 
 	Window::Resize(400, 600);
+
+	Font font(30);
 
 	while (System::Update())
 	{
 		ClearPrint();
 
+		if (state == GameState::title)
+		{
+			font(U"Color Mix").drawAt(Scene::Center().movedBy(0, -100), Palette::Black);
+			if (SimpleGUI::ButtonAt(U"start", Scene::CenterF()))
+			{
+				field.init();
+				state = GameState::playing;
+			}
+		}
+		else if (state == GameState::playing)
+		{
+			field.update(Scene::DeltaTime());
+			{
+				field.draw();
+			}
 
+			if (SimpleGUI::Button(U"reset", { 0,0 })) {
+				field.init();
+				state = GameState::title;
+			}
 
-		field.update(Scene::DeltaTime());
+			if (field.isGameOver())
+			{
+				state = GameState::gameover;
+			}
+		}
+		else if (state == GameState::gameover)
 		{
 			field.draw();
+			Scene::Rect().draw(ColorF(0, 0, 0, 0.5));
+
+			font(U"Score:{}"_fmt(field.score)).drawAt(Scene::Center().movedBy(0, -50), Palette::White);
+
+			if (SimpleGUI::ButtonAt(U"retry", Scene::CenterF()))
+			{
+				field.init();
+				state = GameState::title;
+			}
 		}
 
-		if (SimpleGUI::Button(U"reset", { 0,0 })) {
-			field.init();
-		}
 	}
 }
 
