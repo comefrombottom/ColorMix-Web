@@ -141,6 +141,11 @@ struct NodePoper {
 	double speed = 0;
 };
 
+struct Halo {
+	Vec2 pos;
+
+};
+
 struct Game
 {
 	Grid<Optional<FixedColorNode>> fixedNodeGrid;
@@ -150,7 +155,7 @@ struct Game
 
 	static constexpr double width = 360.0;
 	static constexpr double laneHeight = 500.0;
-	static constexpr double enemySpanLength = 70;
+	static constexpr double enemySpanLength = 65;
 	static constexpr Size gridSize = { 5,static_cast<int32>(laneHeight / enemySpanLength * 2) };
 	static constexpr double oneLaneWidth = width / gridSize.x;
 	static constexpr int32 startEnemySetIndexY = static_cast<int32>(laneHeight / enemySpanLength * 1.5);
@@ -186,7 +191,6 @@ struct Game
 
 	int32 score = 0;
 
-	Font font{ 30 };
 
 	Game()
 	{
@@ -269,16 +273,132 @@ struct Game
 		return fixedNodeCenterY(n + progressIndex);
 	}
 
+	double nodeRadius() const
+	{
+		return oneLaneWidth * 0.4;
+	}
+
 	void drawEnemy(const Vec2& pos, ColorType c) const
 	{
 		double oneEdge = oneLaneWidth * 0.8;
-		RoundRect(Arg::center = pos, oneEdge, oneEdge, 10).draw(getColor(c));
+
+		if (c == ColorType::black) {
+			RoundRect(Arg::center = pos, oneEdge, oneEdge, 10).drawShadow({ 0,0 }, 10, 0, ColorF(0.2, 0.7));
+			RoundRect(Arg::center = pos, oneEdge, oneEdge, 10).draw(ColorF(0.2));
+
+			RoundRect(Arg::center(pos.x, pos.y + oneEdge * 0.2), oneEdge * 0.8, oneEdge * 0.4, oneEdge * 0.1).draw(ColorF(0, 0.1));
+			RoundRect(RectF(Arg::topCenter(pos.x, pos.y - oneEdge / 2 + oneEdge * 0.1), oneEdge * 0.8, oneEdge * 0.15), oneEdge * 0.1).draw(ColorF(1, 0.4));
+
+			RoundRect(Arg::center = pos, oneEdge, oneEdge, 10).drawFrame(4, 0, ColorF(0));
+		}
+		else {
+			HSV hsv = HSV(getColor(c));
+			RoundRect(Arg::center = pos, oneEdge, oneEdge, 10).drawShadow({ 0,0 }, 10, 0, HSV(hsv.h, 1, 1, 0.7));
+			RoundRect(Arg::center = pos, oneEdge, oneEdge, 10).draw(HSV(hsv.h, 0.8, 1));
+
+			RoundRect(Arg::center(pos.x, pos.y + oneEdge * 0.2), oneEdge * 0.8, oneEdge * 0.4, oneEdge * 0.1).draw(HSV(hsv.h, 0.8, 0.9));
+			RoundRect(RectF(Arg::topCenter(pos.x, pos.y - oneEdge / 2 + oneEdge * 0.1), oneEdge * 0.8, oneEdge * 0.15), oneEdge * 0.1).draw(ColorF(1, 0.4));
+
+			RoundRect(Arg::center = pos, oneEdge, oneEdge, 10).drawFrame(4, 0, HSV(hsv.h, 1, 0.9));
+		}
+
 	}
 
-	void drawNode(const Vec2& pos, ColorType c) const
+	void drawNode(const Vec2& pos, double r, ColorType c) const
 	{
-		double r = oneLaneWidth * 0.4;
-		Circle(pos, r).draw(getColor(c));
+		if (c == ColorType::black)
+		{
+			Circle(pos, r).drawShadow({ 0,0 }, r * 0.3, 0, ColorF(0.2, 0.7));
+			Circle(pos, r).draw(ColorF(0.2));
+			{
+				Vec2 center = pos.movedBy(0, r * 0.45);
+				Transformer2D tf(Mat3x2::Scale(1, 0.8, center));
+				Circle(center, r * 0.65).drawShadow({}, r * 0.2, 0, ColorF(0, 0.1));
+			}
+
+			//Circle(pos, r).drawFrame(4, 0, HSV(hsv.h, 1, 0.9));
+			Circle(pos, r * 0.5).drawShadow({ 0,0 }, r * 0.2, 0, ColorF(0.5, 0.1));
+			{
+				Transformer2D tf(Mat3x2::Rotate(-40_deg, pos));
+				Ellipse(pos.movedBy(Vec2(0, -r * 0.7)), r * 0.4, r * 0.2).draw(ColorF(1, 0.4));
+			}
+			{
+				Transformer2D tf(Mat3x2::Rotate(20_deg, pos));
+				Ellipse(pos.movedBy(Vec2(0, -r * 0.8)), r * 0.2, r * 0.15).draw(ColorF(1, 0.4));
+			}
+		}
+		else {
+			HSV hsv = HSV(getColor(c));
+			Circle(pos, r).drawShadow({ 0,0 }, r * 0.3, 0, HSV(hsv.h, 1, 1, 0.7));
+			Circle(pos, r).draw(HSV(hsv.h, 0.8, 1));
+
+			{
+				Vec2 center = pos.movedBy(0, r * 0.45);
+				Transformer2D tf(Mat3x2::Scale(1, 0.8, center));
+				Circle(center, r * 0.65).drawShadow({}, r * 0.2, 0, HSV(hsv.h, 0.8, 0.9));
+			}
+			//Ellipse(pos.movedBy(0, r * 0.45), r * 0.65, r * 0.45).draw(HSV(hsv.h, 0.8, 0.9));
+
+			//Circle(pos, r).drawFrame(4, 0, HSV(hsv.h, 1, 0.9));
+			Circle(pos, r * 0.5).drawShadow({ 0,0 }, r * 0.2, 0, ColorF(0.5, 0.1));
+			{
+				Transformer2D tf(Mat3x2::Rotate(-40_deg, pos));
+				Ellipse(pos.movedBy(Vec2(0, -r * 0.7)), r * 0.4, r * 0.2).draw(ColorF(1, 0.4));
+			}
+			{
+				Transformer2D tf(Mat3x2::Rotate(20_deg, pos));
+				Ellipse(pos.movedBy(Vec2(0, -r * 0.8)), r * 0.2, r * 0.15).draw(ColorF(1, 0.4));
+			}
+		}
+	}
+
+	void drawFixedNode(const Vec2& pos, double r, ColorType c) const
+	{
+
+		if (c == ColorType::black)
+		{
+			Circle(pos, r).drawShadow({ 0,0 }, r * 0.3, 0, ColorF(0.2, 0.7));
+			Circle(pos, r).draw(ColorF(0.2));
+			{
+				Vec2 center = pos.movedBy(0, r * 0.45);
+				Transformer2D tf(Mat3x2::Scale(1, 0.8, center));
+				Circle(center, r * 0.65).drawShadow({}, r * 0.2, 0, ColorF(0, 0.1));
+			}
+
+			Circle(pos, r).drawFrame(4, 0, ColorF(0));
+			Circle(pos, r * 0.5).drawShadow({ 0,0 }, r * 0.2, 0, ColorF(0.5, 0.1));
+			{
+				Transformer2D tf(Mat3x2::Rotate(-40_deg, pos));
+				Ellipse(pos.movedBy(Vec2(0, -r * 0.7)), r * 0.4, r * 0.2).draw(ColorF(1, 0.4));
+			}
+			{
+				Transformer2D tf(Mat3x2::Rotate(20_deg, pos));
+				Ellipse(pos.movedBy(Vec2(0, -r * 0.8)), r * 0.2, r * 0.15).draw(ColorF(1, 0.4));
+			}
+		}
+		else {
+			HSV hsv = HSV(getColor(c));
+			//Circle(pos, r).drawShadow({ 0,0 }, r * 0.3, 0, HSV(hsv.h, 1, 1, 0.7));
+			Circle(pos, r).draw(HSV(hsv.h, 0.8, 1));
+
+			{
+				Vec2 center = pos.movedBy(0, r * 0.45);
+				Transformer2D tf(Mat3x2::Scale(1, 0.8, center));
+				Circle(center, r * 0.65).drawShadow({}, r * 0.2, 0, HSV(hsv.h, 0.8, 0.9));
+			}
+			//Ellipse(pos.movedBy(0, r * 0.45), r * 0.65, r * 0.45).draw(HSV(hsv.h, 0.8, 0.9));
+
+			Circle(pos, r).drawFrame(4, 0, HSV(hsv.h, 1, 0.9));
+			Circle(pos, r * 0.5).drawShadow({ 0,0 }, r * 0.2, 0, ColorF(0.5, 0.1));
+			{
+				Transformer2D tf(Mat3x2::Rotate(-40_deg, pos));
+				Ellipse(pos.movedBy(Vec2(0, -r * 0.7)), r * 0.4, r * 0.2).draw(ColorF(1, 0.4));
+			}
+			{
+				Transformer2D tf(Mat3x2::Rotate(20_deg, pos));
+				Ellipse(pos.movedBy(Vec2(0, -r * 0.8)), r * 0.2, r * 0.15).draw(ColorF(1, 0.4));
+			}
+		}
 	}
 
 	void drawNodePoper(const Vec2& pos, ColorType c) const
@@ -311,7 +431,7 @@ struct Game
 	{
 		Transformer2D tf(Mat3x2::Translate((Scene::Width() - width) / 2, upSpaceY), TransformCursor::Yes);
 
-		enemySpeed += delta * 0.03;
+		enemySpeed += delta * 0.02;
 
 		stageProgress += delta * enemySpeed;
 
@@ -611,7 +731,7 @@ struct Game
 				if (mixable) {
 					ColorNode& mixedNode = nodesLanes[laneIndex][minedIndex];
 					mixedNode.type = mixedColor;
-					mixedNode.wasEnemy = pickingNode->wasEnemy;
+					mixedNode.wasEnemy += pickingNode->wasEnemy;
 					pickingNode.reset();
 					pickingUnderLimitY.reset();
 				}
@@ -632,7 +752,29 @@ struct Game
 
 	void draw() const
 	{
-		Transformer2D tf(Mat3x2::Translate((Scene::Width() - width) / 2, upSpaceY), TransformCursor::Yes);
+		Scene::Rect().draw(Palette::Beige);
+
+		double translateX = (Scene::Width() - width) / 2;
+
+		Transformer2D tf(Mat3x2::Translate(translateX, upSpaceY), TransformCursor::Yes);
+
+		//draw border
+		constexpr double borderSize = 40;
+		for (auto i : step(static_cast<int32>(Ceil(laneHeight / borderSize))))
+		{
+			Color c = i % 2 == 0 ? Palette::Mistyrose : Palette::Lavenderblush;
+			RectF(-20, i * borderSize, width + 40, borderSize).draw(c);
+		}
+
+		RectF(0, 0, width, laneHeight).drawShadow({ 0,0 }, 20);
+
+		for (auto i : step(gridSize.x))
+		{
+			Color c = i % 2 == 0 ? ColorF(0.8, 1, 1) : ColorF(0.9, 1, 1);
+			RectF(i * oneLaneWidth, 0, oneLaneWidth, laneHeight).draw(c);
+		}
+
+		Quad({ 0,laneHeight }, { width,laneHeight }, { width + 100,laneHeight + 200 }, { -100,laneHeight + 200 }).draw(ColorF(0.6, 0.8, 0.8));
 
 		for (auto& p : step(enemyGrid.size())) {
 			if (auto& enemy = enemyGrid[p]) {
@@ -641,7 +783,7 @@ struct Game
 		}
 		for (auto& p : step(fixedNodeGrid.size())) {
 			if (auto& fixedNode = fixedNodeGrid[p]) {
-				drawNode({ laneCenterX(p.x), fixedNodeCenterYReal(p.y) }, fixedNode->type);
+				drawFixedNode({ laneCenterX(p.x), fixedNodeCenterYReal(p.y) }, nodeRadius(), fixedNode->type);
 			}
 		}
 
@@ -650,7 +792,7 @@ struct Game
 		{
 			for (auto& node : lane)
 			{
-				drawNode({ laneCenterX(i), node.y }, node.type);
+				drawNode({ laneCenterX(i), node.y }, nodeRadius(), node.type);
 			}
 		}
 
@@ -663,41 +805,46 @@ struct Game
 			}
 		}
 
-		for (auto i : step(gridSize.x + 1))
-		{
-			Line(i * oneLaneWidth, 0, i * oneLaneWidth, laneHeight).draw(2, Palette::Black.withAlpha(100));
-		}
-
-		Circle(pickWaitingPos, waitingNodeRadius + 3).drawFrame(2, Palette::Black);
-		if (waitingNode)
-		{
-			Circle(pickWaitingPos, waitingNodeRadius).draw(getColor(*waitingNode));
-		}
-		for (auto [i, node] : Indexed(nextNodes))
-		{
-			Circle(pickWaitingPos + Vec2(-50.0 - 50.0 * i, 0), 10).draw(getColor(node));
-		}
-
-
-		if (pickingNode)
-		{
-			Circle(predictedPos, oneLaneWidth * 0.45).draw(getColor(pickingNode->type).withAlpha(128));
-		}
-
 		//draw upper limit
 		RectF(0, fixedNodeCenterYReal(nodeIndexAtYReal(0)) + enemySpanLength / 2 - 20, width, 20).draw(Arg::top = ColorF(0, 1, 1, 0), Arg::bottom = ColorF(0, 1, 1, 0.5));
 
 		//draw under limit line
 		if (pickingUnderLimitY)
 		{
-			Line(0, *pickingUnderLimitY + stageProgress + enemySpanLength / 2, Arg::direction(width, 0)).draw(LineStyle::SquareDot.offset(Scene::Time() * 6), 2, Palette::Black);
+			Line(0, *pickingUnderLimitY + stageProgress + enemySpanLength / 2, Arg::direction(width, 0)).draw(LineStyle::SquareDot.offset(Scene::Time() * 6), 2, ColorF(0, 0.8, 0.8));
+			//RectF(0, *pickingUnderLimitY + stageProgress + enemySpanLength / 2, width, 20).draw(Arg::top = ColorF(0, 1, 1, 0.5), Arg::bottom = ColorF(0, 1, 1, 0));
 		}
 
-		RectF(-100, -100, width + 200, 100).drawShadow({ 0,0 }, 20).draw(Palette::White).drawFrame(2, Palette::Gray);
+		/*for (auto i : step(gridSize.x + 1))
+		{
+			Line(i * oneLaneWidth, 0, i * oneLaneWidth, laneHeight).draw(2, Palette::Black.withAlpha(100));
+		}*/
 
-		//draw score
-		font(U"Score: ", score).draw(Arg::topRight = Vec2(width - 10, -50), Palette::Black);
 
+
+
+
+		RectF(-100, -100, width + 200, 100).drawShadow({ 0,0 }, 20).draw(Palette::Blanchedalmond).drawFrame(2, Palette::Gray);
+
+		RectF(-100, laneHeight, width + 200, 100).drawShadow({ 0,0 }, 20).draw(Palette::Blanchedalmond).drawFrame(2, Palette::Gray);
+
+
+		Circle(pickWaitingPos, waitingNodeRadius + 6).drawShadow({}, 10).draw(Palette::Beige);
+		if (waitingNode)
+		{
+			drawNode(pickWaitingPos, waitingNodeRadius, *waitingNode);
+		}
+		for (auto [i, node] : Indexed(nextNodes))
+		{
+			drawNode(pickWaitingPos + Vec2(-60.0 - 45.0 * i, 0), 10, node);
+		}
+
+
+		if (pickingNode)
+		{
+			ScopedColorMul2D colorMul(ColorF(1, 0.5));
+			drawNode(predictedPos, nodeRadius() * 1.15, pickingNode->type);
+		}
 	}
 };
 
@@ -717,9 +864,7 @@ void Main()
 
 	Window::Resize(400, 600);
 
-	Font font(30);
-
-	TextEditState textEditState;
+	Font font = SimpleGUI::GetFont();
 
 	while (System::Update())
 	{
@@ -727,8 +872,6 @@ void Main()
 
 		if (state == GameState::title)
 		{
-			SimpleGUI::TextBoxAt(textEditState, Scene::CenterF().movedBy(0, -200));
-
 			font(U"Color Mix").drawAt(Scene::Center().movedBy(0, -100), Palette::Black);
 			if (SimpleGUI::ButtonAt(U"start", Scene::CenterF()))
 			{
@@ -743,7 +886,10 @@ void Main()
 				field.draw();
 			}
 
-			if (SimpleGUI::Button(U"reset", { 0,0 })) {
+			//font(U"Score:{}"_fmt(field.score)).draw(Arg::topRight(Scene::Rect().tl()), Palette::Black);
+			font(U"Score: ", field.score).draw(Arg::topRight = Vec2(Scene::Width() - 10, 10), Palette::Black);
+
+			if (SimpleGUI::Button(U"retry", { 5,5 })) {
 				field.init();
 				state = GameState::title;
 			}
