@@ -719,12 +719,16 @@ void Main()
 
 	Font font(30);
 
+	TextEditState textEditState;
+
 	while (System::Update())
 	{
 		ClearPrint();
 
 		if (state == GameState::title)
 		{
+			SimpleGUI::TextBoxAt(textEditState, Scene::CenterF().movedBy(0, -200));
+
 			font(U"Color Mix").drawAt(Scene::Center().movedBy(0, -100), Palette::Black);
 			if (SimpleGUI::ButtonAt(U"start", Scene::CenterF()))
 			{
