@@ -870,14 +870,14 @@ void Main()
 
 	Texture colorMixLogo(U"asset/ColorMixLogo.png");
 
-	AudioAsset::Register(U"mix", U"asset/SFX_UI_Click_Designed_Liquid_Generic_Open_2.wav");
+	/*AudioAsset::Register(U"mix", U"asset/SFX_UI_Click_Designed_Liquid_Generic_Open_2.wav");
 	AudioAsset::Register(U"pick", U"asset/SFX_UI_Click_Designed_Pop_Generic_1.wav");
 	AudioAsset::Register(U"pop", U"asset/SFX_UI_Click_Organic_Pop_Thin_Generic_1.wav");
 	AudioAsset::Register(U"pick2", U"asset/SFX_UI_Click_Organic_Pop_Negative_2.wav");
 	AudioAsset::Register(U"drop", U"asset/SFX_UI_Click_Organic_Plastic_Soft_Generic_1.wav");
 	AudioAsset::Register(U"broke", U"asset/SFX_UI_Click_Designed_Metallic_Negative_1.wav");
 	AudioAsset::Register(U"click", U"asset/SFX_UI_Button_Organic_Plastic_Thin_Negative_Back_2.wav");
-	AudioAsset::Register(U"finish", U"asset/SFX_UI_Click_Designed_Scifi_Flangy_Thick_Generic_1.wav");
+	AudioAsset::Register(U"finish", U"asset/SFX_UI_Click_Designed_Scifi_Flangy_Thick_Generic_1.wav");*/
 
 
 
