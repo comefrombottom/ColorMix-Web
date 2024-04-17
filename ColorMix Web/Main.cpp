@@ -868,7 +868,7 @@ void Main()
 
 	Font font = SimpleGUI::GetFont();
 
-	Texture colorMixLogo(U"asset/ColorMixLogo.png");
+	//Texture colorMixLogo(U"asset/ColorMixLogo.png");
 
 	/*AudioAsset::Register(U"mix", U"asset/SFX_UI_Click_Designed_Liquid_Generic_Open_2.wav");
 	AudioAsset::Register(U"pick", U"asset/SFX_UI_Click_Designed_Pop_Generic_1.wav");
@@ -888,7 +888,7 @@ void Main()
 		if (state == GameState::title)
 		{
 			//font(U"Color Mix").drawAt(Scene::Center().movedBy(0, -100), Palette::Black);
-			colorMixLogo.drawAt(Scene::Center().movedBy(0, -50));
+			//colorMixLogo.drawAt(Scene::Center().movedBy(0, -50));
 			if (SimpleGUI::ButtonAt(U"start", Scene::CenterF().moveBy(0, 100)))
 			{
 				field.init();
