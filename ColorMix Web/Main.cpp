@@ -94,6 +94,7 @@ struct ColorNode
 	int32 wasEnemy = 0;
 	bool beFixed = false;
 	bool bePicked = false;
+	Stopwatch monyuTimer{ StartImmediately::Yes };
 };
 
 struct PickedNode
@@ -118,11 +119,12 @@ struct NodePoper {
 	double y;
 	ColorType type;
 	double speed = 0;
+	int32 count = 0;
 };
 
 struct Halo {
 	Vec2 pos;
-
+	Stopwatch lifeTimer{ StartImmediately::Yes };
 };
 
 struct Game
@@ -131,6 +133,7 @@ struct Game
 	Grid<Optional<ColorEnemy>> enemyGrid;
 	Array<Array<ColorNode>> nodesLanes;
 	Array<Array<NodePoper>> nodePopers;
+
 
 	static constexpr double width = 360.0;
 	static constexpr double laneHeight = 500.0;
@@ -169,6 +172,7 @@ struct Game
 
 
 	int32 score = 0;
+
 
 
 	Game()
@@ -331,6 +335,12 @@ struct Game
 		}
 	}
 
+	void drawNode(const Vec2& pos, double r, ColorType c, const Stopwatch& monyuTimer) const {
+		double attenuation = 1 - EaseInOutExpo(monyuTimer.sF());
+		Transformer2D scale(Mat3x2::Scale(1 + 0.05 * Sin(monyuTimer.sF() * 20 + Math::HalfPi) * attenuation, 1 + 0.05 * Sin(monyuTimer.sF() * 20) * attenuation, pos));
+		drawNode(pos, r, c);
+	}
+
 	void drawFixedNode(const Vec2& pos, double r, ColorType c) const
 	{
 
@@ -491,6 +501,7 @@ struct Game
 										emptyGrids.push_back(aroundIndex);
 										nodePopers[aroundIndex.x].push_back({ fixedNodeCenterYReal(aroundIndex.y) ,node.type });
 										score += 1;
+										AudioAsset(U"broke").playOneShot(1, 0, Random(0.9, 1.1));
 										foundAround = true;
 									}
 								}
@@ -501,6 +512,7 @@ struct Game
 										score += o->wasEnemy;
 										o.reset();
 										emptyGrids.push_back(aroundIndex);
+										AudioAsset(U"pop").playOneShot(1, 0, Random(0.9, 1.1));
 										foundAround = true;
 									}
 								}
@@ -539,9 +551,12 @@ struct Game
 					if (enemyGrid.inBounds(findIndex)) {
 						if (auto& o = enemyGrid[findIndex])
 						{
+
 							ColorNode node = { fixedNodeCenterYReal(i), o->type };
 							node.wasEnemy = 1;
 							nodesLanes[lane_i].push_back(node);
+							AudioAsset(U"pop").playOneShot(1, 0, 1 + p.count * 0.15);
+							p.count++;
 							o.reset();
 							tellGridBecomeEmpty(findIndex);
 						}
@@ -574,6 +589,8 @@ struct Game
 			pickingNode = PickedNode{ *waitingNode };
 			waitingNode.reset();
 			waitNodeSetTimer.restart();
+
+			AudioAsset(U"pick2").playOneShot(1, 0, Random(0.8, 1.2));
 		}
 
 		if (not pickingNode) {
@@ -587,6 +604,7 @@ struct Game
 					node.bePicked = true;
 					pickingUnderLimitY = node.y - stageProgress;
 					picked = true;
+					AudioAsset(U"pick2").playOneShot(1, 0, Random(0.8, 1.2));
 					break;
 				}
 			}
@@ -711,6 +729,8 @@ struct Game
 					ColorNode& mixedNode = nodesLanes[laneIndex][minedIndex];
 					mixedNode.type = mixedColor;
 					mixedNode.wasEnemy += pickingNode->wasEnemy;
+					mixedNode.monyuTimer.restart();
+					AudioAsset(U"mix").playOneShot(1, 0, Random(0.9, 1.1));
 					pickingNode.reset();
 					pickingUnderLimitY.reset();
 				}
@@ -724,6 +744,7 @@ struct Game
 					nodesLanes[laneIndex].push_back({ predictedPos.y, pickingNode->type,pickingNode->wasEnemy });
 					pickingNode.reset();
 					pickingUnderLimitY.reset();
+					AudioAsset(U"drop").playOneShot(1, 0, Random(0.9, 1.1));
 				}
 			}
 		}
@@ -753,7 +774,15 @@ struct Game
 			RectF(i * oneLaneWidth, 0, oneLaneWidth, laneHeight).draw(c);
 		}
 
-		Quad({ 0,laneHeight }, { width,laneHeight }, { width + 100,laneHeight + 200 }, { -100,laneHeight + 200 }).draw(ColorF(0.6, 0.8, 0.8));
+		//Quad({ 0,laneHeight }, { width,laneHeight }, { width + 100,laneHeight + 200 }, {-100,laneHeight+200}).draw(ColorF(0.6, 0.8, 0.8));
+
+		for (auto [i, lane] : Indexed(nodePopers))
+		{
+			for (auto& p : lane)
+			{
+				drawNodePoper({ laneCenterX(i), p.y }, p.type);
+			}
+		}
 
 		for (auto& p : step(enemyGrid.size())) {
 			if (auto& enemy = enemyGrid[p]) {
@@ -771,18 +800,12 @@ struct Game
 		{
 			for (auto& node : lane)
 			{
-				drawNode({ laneCenterX(i), node.y }, nodeRadius(), node.type);
+				drawNode({ laneCenterX(i), node.y }, nodeRadius(), node.type, node.monyuTimer);
 			}
 		}
 
 
-		for (auto [i, lane] : Indexed(nodePopers))
-		{
-			for (auto& p : lane)
-			{
-				drawNodePoper({ laneCenterX(i), p.y }, p.type);
-			}
-		}
+
 
 		//draw upper limit
 		RectF(0, fixedNodeCenterYReal(nodeIndexAtYReal(0)) + enemySpanLength / 2 - 20, width, 20).draw(Arg::top = ColorF(0, 1, 1, 0), Arg::bottom = ColorF(0, 1, 1, 0.5));
@@ -845,7 +868,18 @@ void Main()
 
 	Font font = SimpleGUI::GetFont();
 
-	TextureAsset::Register(U"logo", U"/resources/ColorMixTitle.png");
+	Texture colorMixLogo(U"asset/ColorMixLogo.png");
+
+	AudioAsset::Register(U"mix", U"asset/SFX_UI_Click_Designed_Liquid_Generic_Open_2.wav");
+	AudioAsset::Register(U"pick", U"asset/SFX_UI_Click_Designed_Pop_Generic_1.wav");
+	AudioAsset::Register(U"pop", U"asset/SFX_UI_Click_Organic_Pop_Thin_Generic_1.wav");
+	AudioAsset::Register(U"pick2", U"asset/SFX_UI_Click_Organic_Pop_Negative_2.wav");
+	AudioAsset::Register(U"drop", U"asset/SFX_UI_Click_Organic_Plastic_Soft_Generic_1.wav");
+	AudioAsset::Register(U"broke", U"asset/SFX_UI_Click_Designed_Metallic_Negative_1.wav");
+	AudioAsset::Register(U"click", U"asset/SFX_UI_Button_Organic_Plastic_Thin_Negative_Back_2.wav");
+	AudioAsset::Register(U"finish", U"asset/SFX_UI_Click_Designed_Scifi_Flangy_Thick_Generic_1.wav");
+
+
 
 	while (System::Update())
 	{
@@ -854,11 +888,13 @@ void Main()
 		if (state == GameState::title)
 		{
 			//font(U"Color Mix").drawAt(Scene::Center().movedBy(0, -100), Palette::Black);
-			TextureAsset(U"logo").drawAt(Scene::Center().movedBy(0, -100));
+			colorMixLogo.drawAt(Scene::Center().movedBy(0, -50));
 			if (SimpleGUI::ButtonAt(U"start", Scene::CenterF().moveBy(0, 100)))
 			{
 				field.init();
 				state = GameState::playing;
+				AudioAsset(U"click").playOneShot();
+
 			}
 		}
 		else if (state == GameState::playing)
@@ -872,6 +908,7 @@ void Main()
 			font(U"Score: ", field.score).draw(Arg::topRight = Vec2(Scene::Width() - 10, 10), Palette::Black);
 
 			if (SimpleGUI::Button(U"retry", { 5,5 })) {
+				AudioAsset(U"click").playOneShot();
 				field.init();
 				state = GameState::title;
 			}
@@ -879,6 +916,7 @@ void Main()
 			if (field.isGameOver())
 			{
 				state = GameState::gameover;
+				AudioAsset(U"finish").playOneShot();
 			}
 		}
 		else if (state == GameState::gameover)
@@ -892,6 +930,8 @@ void Main()
 			{
 				field.init();
 				state = GameState::title;
+				AudioAsset(U"click").playOneShot();
+
 			}
 		}
 
