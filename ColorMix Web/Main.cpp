@@ -1,50 +1,5 @@
 # include <Siv3D.hpp> // Siv3D v0.6.14
 
-class NeighbourSearcher {
-	struct DistancePoint {
-		double distance;
-		int32 x;
-		int32 y;
-
-		auto operator<=>(const DistancePoint&) const = default;
-	};
-	std::set<DistancePoint> distancePoints;
-	Vec2 oneEdge{};
-	Vec2 center{};
-
-	double distanceOfIndex(const Point& index) {
-		return Geometry2D::Distance(RectF(index * oneEdge, oneEdge), center);
-	}
-	void insertDistancePoint(const Point& index) {
-		distancePoints.insert({ distanceOfIndex(index), index.x,index.y });
-	}
-public:
-	NeighbourSearcher() = default;
-	NeighbourSearcher(const Vec2& oneEdge, const Vec2& center) :oneEdge(oneEdge), center(center) {
-		insertDistancePoint(Floor(center / oneEdge).asPoint());
-	}
-	Point current() {
-		auto& dp = *distancePoints.begin();
-		return Point(dp.x, dp.y);
-	}
-	Point pop() {
-		Point origin = Floor(center / oneEdge).asPoint();
-		Point index = current();
-		distancePoints.erase(distancePoints.begin());
-
-		bool isOriginUpDown = index.x == origin.x and abs(index.y - origin.y) <= 1;
-		bool isOrigin = index == origin;
-
-		if (index.x > origin.x or isOriginUpDown)insertDistancePoint(index + Point(1, 0));
-		if (index.x < origin.x or isOriginUpDown)insertDistancePoint(index + Point(-1, 0));
-		if (index.y > origin.y or isOrigin)insertDistancePoint(index + Point(0, 1));
-		if (index.y < origin.y or isOrigin)insertDistancePoint(index + Point(0, -1));
-
-		return index;
-	}
-
-};
-
 enum class ColorType
 {
 	red,
@@ -107,6 +62,30 @@ Color getColor(ColorType type)
 		return Palette::White;
 	}
 }
+
+//Real three color
+//Color getColor(ColorType type)
+//{
+//	switch (type)
+//	{
+//	case ColorType::red:
+//		return Palette::Magenta;
+//	case ColorType::yellow:
+//		return Palette::Yellow;
+//	case ColorType::blue:
+//		return Palette::Cyan;
+//	case ColorType::orange:
+//		return Palette::Red;
+//	case ColorType::green:
+//		return Palette::Green;
+//	case ColorType::purple:
+//		return Palette::Blue;
+//	case ColorType::black:
+//		return Palette::Black;
+//	default:
+//		return Palette::White;
+//	}
+//}
 
 struct ColorNode
 {
@@ -866,14 +845,17 @@ void Main()
 
 	Font font = SimpleGUI::GetFont();
 
+	TextureAsset::Register(U"logo", U"/resources/ColorMixTitle.png");
+
 	while (System::Update())
 	{
 		ClearPrint();
 
 		if (state == GameState::title)
 		{
-			font(U"Color Mix").drawAt(Scene::Center().movedBy(0, -100), Palette::Black);
-			if (SimpleGUI::ButtonAt(U"start", Scene::CenterF()))
+			//font(U"Color Mix").drawAt(Scene::Center().movedBy(0, -100), Palette::Black);
+			TextureAsset(U"logo").drawAt(Scene::Center().movedBy(0, -100));
+			if (SimpleGUI::ButtonAt(U"start", Scene::CenterF().moveBy(0, 100)))
 			{
 				field.init();
 				state = GameState::playing;
