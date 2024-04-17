@@ -868,16 +868,16 @@ void Main()
 
 	Font font = SimpleGUI::GetFont();
 
-	//Texture colorMixLogo(U"asset/ColorMixLogo.png");
+	TextureAsset::Register(U"logo", U"asset/ColorMixLogo.png");
 
-	/*AudioAsset::Register(U"mix", U"asset/SFX_UI_Click_Designed_Liquid_Generic_Open_2.wav");
+	AudioAsset::Register(U"mix", U"asset/SFX_UI_Click_Designed_Liquid_Generic_Open_2.wav");
 	AudioAsset::Register(U"pick", U"asset/SFX_UI_Click_Designed_Pop_Generic_1.wav");
 	AudioAsset::Register(U"pop", U"asset/SFX_UI_Click_Organic_Pop_Thin_Generic_1.wav");
 	AudioAsset::Register(U"pick2", U"asset/SFX_UI_Click_Organic_Pop_Negative_2.wav");
 	AudioAsset::Register(U"drop", U"asset/SFX_UI_Click_Organic_Plastic_Soft_Generic_1.wav");
 	AudioAsset::Register(U"broke", U"asset/SFX_UI_Click_Designed_Metallic_Negative_1.wav");
 	AudioAsset::Register(U"click", U"asset/SFX_UI_Button_Organic_Plastic_Thin_Negative_Back_2.wav");
-	AudioAsset::Register(U"finish", U"asset/SFX_UI_Click_Designed_Scifi_Flangy_Thick_Generic_1.wav");*/
+	AudioAsset::Register(U"finish", U"asset/SFX_UI_Click_Designed_Scifi_Flangy_Thick_Generic_1.wav");
 
 
 
@@ -888,7 +888,7 @@ void Main()
 		if (state == GameState::title)
 		{
 			//font(U"Color Mix").drawAt(Scene::Center().movedBy(0, -100), Palette::Black);
-			//colorMixLogo.drawAt(Scene::Center().movedBy(0, -50));
+			TextureAsset(U"logo").drawAt(Scene::Center().movedBy(0, -50));
 			if (SimpleGUI::ButtonAt(U"start", Scene::CenterF().moveBy(0, 100)))
 			{
 				field.init();
