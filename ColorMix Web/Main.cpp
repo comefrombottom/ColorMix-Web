@@ -933,6 +933,11 @@ void Main()
 				AudioAsset(U"click").playOneShot();
 
 			}
+			if (SimpleGUI::ButtonAt(U"Post score on X(Twitter)", Scene::Rect().topCenter().moveBy(0, 50))) {
+				const String text = U"ColorMixでスコア{}を達成しました！\n#ColorMix #Siv3D\nhttps://comefrombottom.github.io/ColorMix-Web/"_fmt(field.score);
+				Twitter::OpenTweetWindow(text);
+			}
+
 		}
 
 	}
